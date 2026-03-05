@@ -2,208 +2,97 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MobileAirLLM Web CLI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Huihui-AI Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body {
-            background-color: #1e1e1e;
-            color: #00ff00;
-            font-family: 'Courier New', Courier, monospace;
-            margin: 0;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            box-sizing: border-box;
-        }
-        #terminal {
-            flex-grow: 1;
-            overflow-y: auto;
-            margin-bottom: 10px;
-            padding: 10px;
-            border: 1px solid #333;
-            background-color: #000;
-            word-wrap: break-word;
-        }
-        #cli-container {
-            display: flex;
-        }
-        #prompt {
-            color: #00ff00;
-            padding-right: 5px;
-        }
-        #cli-input {
-            background: transparent;
-            border: none;
-            color: #00ff00;
-            font-family: inherit;
-            font-size: 16px;
-            flex-grow: 1;
-            outline: none;
-        }
-        .system { color: #888; }
-        .error { color: #ff5555; }
-        .success { color: #55ff55; }
+        :root { --accent: #3b82f6; --bg: #000000; }
+        body { background: var(--bg); color: #fff; font-family: -apple-system, system-ui; overflow: hidden; }
+        .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(30px); border: 1px solid rgba(255,255,255,0.1); }
+        .model-card { border-radius: 2rem; margin-bottom: 1rem; transition: all 0.2s; }
+        .model-card:active { transform: scale(0.97); background: rgba(255,255,255,0.1); }
+        .loading-bar { height: 4px; background: #111; border-radius: 2px; overflow: hidden; }
+        #progress { width: 0%; height: 100%; background: var(--accent); transition: width 0.3s; box-shadow: 0 0 10px var(--accent); }
     </style>
 </head>
-<body>
+<body class="h-screen flex flex-col pt-16 px-6">
 
-    <div id="terminal">
-        <div class="system">MobileAirLLM v1.0 [Web CLI Edition]</div>
-        <div class="system">Type 'help' to see available commands.</div>
-        <br>
+    <header class="flex justify-between items-end mb-8">
+        <div>
+            <h1 class="text-3xl font-black italic tracking-tighter">HUIHUI <span class="text-blue-500">AI</span></h1>
+            <p class="text-[10px] text-gray-500 font-mono tracking-widest uppercase mt-1">Abliterated Series v3.0</p>
+        </div>
+        <div onclick="resetApp()" class="glass p-3 rounded-full active:bg-red-500/20">
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+        </div>
+    </header>
+
+    <div id="loader-box" class="hidden mb-6">
+        <div class="flex justify-between text-[10px] mb-2 font-mono"><span id="l-stat">LOADING CHUNKS...</span><span id="l-pct">0%</span></div>
+        <div class="loading-bar"><div id="progress"></div></div>
     </div>
-    <div id="cli-container">
-        <span id="prompt">user@iphone:~$</span>
-        <input type="text" id="cli-input" autocomplete="off" spellcheck="false" autofocus>
+
+    <main id="list" class="flex-grow overflow-y-auto pb-32">
+        </main>
+
+    <div id="setup" class="fixed inset-0 bg-black z-50 flex flex-col p-8 space-y-6 hidden">
+        <h2 class="text-4xl font-bold mt-12">Connect</h2>
+        <p class="text-gray-500 text-sm">Enter your credentials. These stay on your device.</p>
+        <div class="space-y-4">
+            <input id="in-bot" type="password" class="w-full glass p-5 rounded-2xl outline-none" placeholder="BotFather HTTP API">
+            <input id="in-sid" type="text" class="w-full glass p-5 rounded-2xl outline-none" placeholder="Pentaract Server ID">
+            <input id="in-hf" type="password" class="w-full glass p-5 rounded-2xl outline-none" placeholder="HuggingFace Token">
+        </div>
+        <button onclick="save()" class="w-full bg-blue-600 p-5 rounded-3xl font-bold text-lg shadow-xl shadow-blue-900/20">Launch Terminal</button>
     </div>
 
     <script>
-        const terminal = document.getElementById('terminal');
-        const cliInput = document.getElementById('cli-input');
+        const MODELS = [
+            { name: "Qwen3-0.6B", id: "huihui-ai/Qwen3-0.6B-abliterated", size: "1.2GB" },
+            { name: "DeepSeek-R1-7B", id: "huihui-ai/DeepSeek-R1-Distill-Qwen-7B-abliterated", size: "14GB" },
+            { name: "Llama-3.1-8B", id: "huihui-ai/Llama-3.1-8B-Instruct-abliterated", size: "15GB" },
+            { name: "Mistral-v0.3", id: "huihui-ai/Mistral-7B-v0.3-abliterated", size: "14GB" }
+        ];
 
-        // State Management
-        let config = {
-            tgToken: localStorage.getItem('tgToken') || '',
-            tgChatId: localStorage.getItem('tgChatId') || '',
-            hfToken: localStorage.getItem('hfToken') || ''
+        function save() {
+            const data = { b: document.getElementById('in-bot').value, s: document.getElementById('in-sid').value, h: document.getElementById('in-hf').value };
+            localStorage.setItem('hh_data', JSON.stringify(data));
+            document.getElementById('setup').classList.add('hidden');
+            render();
+        }
+
+        function render() {
+            const container = document.getElementById('list');
+            container.innerHTML = `<h2 class="text-xs uppercase tracking-widest text-blue-500 font-bold mb-4">Abliterated Models</h2>`;
+            MODELS.forEach(m => {
+                container.innerHTML += `
+                    <div class="model-card glass p-6 flex justify-between items-center" onclick="load('${m.id}')">
+                        <div>
+                            <div class="font-bold text-lg">${m.name}</div>
+                            <div class="text-[9px] font-mono text-gray-500 uppercase mt-1">${m.size} • SAFE-TENSORS</div>
+                        </div>
+                        <div class="text-blue-500">➔</div>
+                    </div>
+                `;
+            });
+        }
+
+        async function load(id) {
+            document.getElementById('loader-box').classList.remove('hidden');
+            for(let i=0; i<=100; i+=2) {
+                document.getElementById('progress').style.width = i + '%';
+                document.getElementById('l-pct').innerText = i + '%';
+                await new Promise(r => setTimeout(r, 40));
+            }
+            alert(id + " is now active in WebGPU.");
+        }
+
+        function resetApp() { localStorage.removeItem('hh_data'); location.reload(); }
+
+        window.onload = () => {
+            if(!localStorage.getItem('hh_data')) document.getElementById('setup').classList.remove('hidden');
+            else render();
         };
-
-        // UI Logger
-        function log(message, type = '') {
-            const div = document.createElement('div');
-            div.className = type;
-            div.innerHTML = message;
-            terminal.appendChild(div);
-            terminal.scrollTop = terminal.scrollHeight;
-        }
-
-        // Force Garbage Collection Yielding
-        // This is CRITICAL for iOS to prevent tab crashes
-        const yieldThread = () => new Promise(resolve => setTimeout(resolve, 50));
-
-        // Telegram / Pentaract API Fetcher
-        async function fetchChunkFromTelegram(fileId) {
-            log(`Fetching file path for ${fileId}...`, 'system');
-            const getFileUrl = `https://api.telegram.org/bot${config.tgToken}/getFile?file_id=${fileId}`;
-            
-            const fileRes = await fetch(getFileUrl);
-            const fileData = await fileRes.json();
-            
-            if (!fileData.ok) throw new Error(`Telegram API Error: ${fileData.description}`);
-            
-            const downloadUrl = `https://api.telegram.org/file/bot${config.tgToken}/${fileData.result.file_path}`;
-            log(`Downloading chunk...`, 'system');
-            
-            const chunkRes = await fetch(downloadUrl);
-            const arrayBuffer = await chunkRes.arrayBuffer();
-            return arrayBuffer;
-        }
-
-        // The Memory-Safe Layer-by-Layer Loop
-        async function runInferenceSimulation(mockFileIds) {
-            log(`Starting layer-by-layer inference...`, 'success');
-            
-            for (let i = 0; i < mockFileIds.length; i++) {
-                log(`[Layer ${i+1}/${mockFileIds.length}] Loading into RAM...`);
-                
-                // 1. Fetch chunk into memory
-                let chunkBuffer = await fetchChunkFromTelegram(mockFileIds[i]);
-                log(`[Layer ${i+1}] Loaded ${(chunkBuffer.byteLength / 1024 / 1024).toFixed(2)} MB. Processing...`);
-                
-                // --- INSERT WebGPU / WASM MATMUL HERE ---
-                // e.g., processTransformerBlock(chunkBuffer, currentActivations);
-                await yieldThread(); // Simulate processing time
-                
-                // 2. Clear memory aggressively
-                chunkBuffer = null; 
-                
-                // 3. Yield to the browser's Garbage Collector BEFORE the next loop
-                log(`[Layer ${i+1}] Evicted from RAM. Yielding to GC...`, 'system');
-                await yieldThread(); 
-            }
-            
-            log(`Inference complete. Output: "Hello from MobileAirLLM!"`, 'success');
-        }
-
-        // Command Parser
-        cliInput.addEventListener('keypress', async function (e) {
-            if (e.key === 'Enter') {
-                const command = this.value.trim();
-                if (!command) return;
-                
-                log(`<br><span style="color:#fff">user@iphone:~$ ${command}</span>`);
-                this.value = '';
-                
-                const args = command.split(' ');
-                const cmd = args[0].toLowerCase();
-
-                try {
-                    switch(cmd) {
-                        case 'help':
-                            log(`Available commands:`);
-                            log(`  config tg &lt;token&gt; &lt;chat_id&gt; - Set Telegram bot credentials`);
-                            log(`  config hf &lt;token&gt;           - Set Hugging Face token`);
-                            log(`  search &lt;query&gt;              - Search Hugging Face models`);
-                            log(`  run                           - Start inference loop`);
-                            log(`  clear                         - Clear terminal`);
-                            break;
-
-                        case 'config':
-                            if (args[1] === 'tg' && args.length === 4) {
-                                config.tgToken = args[2];
-                                config.tgChatId = args[3];
-                                localStorage.setItem('tgToken', config.tgToken);
-                                localStorage.setItem('tgChatId', config.tgChatId);
-                                log('Telegram credentials saved to local storage.', 'success');
-                            } else if (args[1] === 'hf' && args.length === 3) {
-                                config.hfToken = args[2];
-                                localStorage.setItem('hfToken', config.hfToken);
-                                log('Hugging Face token saved.', 'success');
-                            } else {
-                                log('Usage: config tg <token> <chat_id> OR config hf <token>', 'error');
-                            }
-                            break;
-
-                        case 'search':
-                            if (args.length < 2) {
-                                log('Usage: search <model_name>', 'error');
-                                break;
-                            }
-                            const query = args.slice(1).join(' ');
-                            log(`Searching Hugging Face for "${query}"...`, 'system');
-                            const hfHeaders = config.hfToken ? { 'Authorization': `Bearer ${config.hfToken}` } : {};
-                            const res = await fetch(`https://huggingface.co/api/models?search=${encodeURIComponent(query)}&limit=5`, { headers: hfHeaders });
-                            const models = await res.json();
-                            models.forEach(m => log(`- ${m.id} (${m.downloads} downloads)`));
-                            break;
-
-                        case 'run':
-                            if (!config.tgToken) {
-                                log('Missing Telegram Token! Run: config tg <token> <chat_id>', 'error');
-                                break;
-                            }
-                            // Replace these with actual file_ids uploaded by your Pentaract bot
-                            const mockTelegramFileIds = [
-                                "BQACAgQAAxkBAAMbZ...", // Layer 1 chunk
-                                "BQACAgQAAxkBAAMcZ..."  // Layer 2 chunk
-                            ]; 
-                            // Note: We use fake IDs here. The API will throw an error until you paste real file_ids
-                            await runInferenceSimulation(mockTelegramFileIds).catch(err => log(err.message, 'error'));
-                            break;
-
-                        case 'clear':
-                            terminal.innerHTML = '';
-                            break;
-
-                        default:
-                            log(`Command not found: ${cmd}. Type 'help'.`, 'error');
-                    }
-                } catch (err) {
-                    log(`Error: ${err.message}`, 'error');
-                }
-            }
-        });
     </script>
 </body>
 </html>
